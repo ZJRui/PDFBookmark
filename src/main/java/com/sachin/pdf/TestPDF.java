@@ -103,7 +103,8 @@ public class TestPDF {
         BufferedReader br = null;
         PrintWriter pw = null;
         try {
-            br = new BufferedReader(new FileReader(srcFile));
+            InputStreamReader fReader = new InputStreamReader(new FileInputStream(srcFile),"UTF-8");
+            br = new BufferedReader(fReader);
             pw = new PrintWriter(new FileWriter(newCategoryBookmarkFile, true));
             String line = br.readLine();
             int tag = 0;
@@ -177,6 +178,10 @@ public class TestPDF {
             if (dbPdfFile != null && dbPdfFile.getLastModifyTime() >= lastModified) {
                 return;
             }
+          /*  count++;
+            if (count >4) {
+                return;
+            }*/
             System.out.println(filePath + "修改过，需要重新生成书签");
             modifyCategoryCache.add(fileCategory);
             StringBuilder bookmarkFileBuilder = new StringBuilder();
@@ -256,7 +261,6 @@ public class TestPDF {
             line.append(pageNumber);
             if (!isNumeric(current.getTitle())) {//如果只包含数字就不写入了
                 //处理当前书签的子书签
-                System.out.println(line);
                 FileUtils.writeStringToFile(new File(bookmarkFile.getAbsolutePath()), "\n" + line.toString(), "UTF-8", true);
             }
             writeBookMark(document, current, level + 1, bookmarkFile, fileName);

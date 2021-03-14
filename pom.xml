@@ -80,47 +80,29 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>2.4</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.sachin.pdf.TestPDF</mainClass>
-                            <!--在mainFest文件中生成class-path属性-->
-                            <addClasspath>true</addClasspath>
-                            <!--修改类路径的前缀-->
-                            <classpathPrefix>lib/</classpathPrefix>
-                        </manifest>
-                    </archive>
 
-                </configuration>
-            </plugin>
-            <!--在打包阶段将依赖的jar包导出到lib目录下-->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>2.10</version>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.1</version>
+                <configuration>
+
+                    <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                            <mainClass>com.sachin.pdf.TestPDF</mainClass>
+                        </transformer>
+                    </transformers>
+                </configuration>
                 <executions>
                     <execution>
-                        <id>copy-dependencies</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>copy-dependencies</goal>
+                            <goal>shade</goal>
                         </goals>
-                        <configuration>
-                            <type>jar</type>
-                            <includeTypes>jar</includeTypes>
-                            <outputDirectory>${project.build.outputDirectory}/lib</outputDirectory>
-                        </configuration>
                     </execution>
                 </executions>
-                <configuration>
-                    <outputDirectory>${project.build.outputDirectory}/lib></outputDirectory>
-                </configuration>
-            </plugin>
 
+            </plugin>
         </plugins>
     </build>
 
