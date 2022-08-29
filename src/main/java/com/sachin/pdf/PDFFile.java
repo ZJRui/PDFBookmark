@@ -13,6 +13,7 @@ import java.io.Serializable;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@SuppressWarnings("all")
 public class PDFFile implements Serializable {
 
     private static final long serialVersionUID = -3704326372217269309L;
