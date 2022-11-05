@@ -349,7 +349,8 @@ public class TestPDF {
 
             long lastModified = file.lastModified();
             PDFFile dbPdfFile = cache.get(fileId);
-            if (dbPdfFile != null && dbPdfFile.getLastModifyTime() >= lastModified) {
+            if (dbPdfFile != null && dbPdfFile.getLastModifyTime() >= lastModified) {//判断书签文件是否存在
+
                 return;
             }
             System.out.println(filePath + "修改过，需要重新生成书签");
@@ -507,7 +508,7 @@ public class TestPDF {
         List<PDFFile> files = (List<PDFFile>) oi.readObject();
         files.forEach(file -> {
             if (!StringUtils.isEmpty(file.getId())) {
-                cache.put(file.getFilePath(), file);
+                cache.put(file.getId(), file);
             }
         });
 
