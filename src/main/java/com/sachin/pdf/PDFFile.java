@@ -17,6 +17,7 @@ import java.io.Serializable;
 public class PDFFile implements Serializable {
 
     private static final long serialVersionUID = -3704326372217269309L;
+    private String id;//filePath减去targetPath，然后去除路径分隔符\（windows）或者/(mac)得到的字符串
     private String filePath;//G:programme\java\dd.pdf
     private String fileName;//测试.pdf
     private String fileCategory;

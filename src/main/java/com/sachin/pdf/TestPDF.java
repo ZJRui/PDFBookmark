@@ -1,5 +1,7 @@
 package com.sachin.pdf;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.cos.COSDocument;
@@ -22,29 +24,51 @@ import java.util.regex.Pattern;
  **/
 @SuppressWarnings("all")
 public class TestPDF {
+    @AllArgsConstructor
+    @Data
+    static class CategoryInfo {
+        // 分类的id，我们使用分类 书签目录表示：  E:\programme\python\书签
+        String categoryId = "";
+        // 分类书签目录   E:\programme\python\书签
+        String categoryBookmarkDir = "";
 
+        // 分类书签路径 E:\programme\python\书签\001-总书签.txt
+        String categoryBookmarkFilePath = "";
+
+        boolean needReGenCategoryBookmark = false;
+
+    }
+
+    /**
+     * 存储所有PDF文件的书签路径， 根据这个set，我们可以确定 书签目录下的一个书签是否是有效的书签，来确定是否删除一些无效的书签
+     */
+    public static Set<String> allPDFBookMarkSet = new HashSet<>();
     public static Map<String, PDFFile> cache = new HashMap();
-    public static Set<String> modifyCategoryCache = new HashSet<>();// PDF文件被修改过的 category
-    public static Set<String> allCategory = new HashSet<>();
+    public static Map<String, CategoryInfo> categoryInfoMap = new HashMap<>();
 
     static Pattern pattern = Pattern.compile("^第.*章");
     public static volatile int count = 0;
     /**
      * 扫描的目录
      */
-   static String targetDir = "";
+    static String targetDir = "";
 
-   static String bookmarkFileName="书籍书签.txt";
-   static String bookmarkFilePath="";
+    static String bookmarkFileName = "书籍书签.txt";
+    static String bookmarkFilePath = "";
 
     /**
      * 书签序列化后的文件对象
      */
-   static String bookMarkSeriFileName="书签序列化对象.txt";
+    static String bookMarkSeriFileName = "书签序列化对象.txt";
     /**
      * 书签序列化后的文件路径
      */
     static String bookMarkSeriFilePath = "";
+
+    static String separator = "";
+    //正则表示
+    static String regSeparator = "";
+
     public static void main(String[] args) throws Exception {
 
 
@@ -53,98 +77,179 @@ public class TestPDF {
         //             "");
         // }
 
-        args=new String[]{"/Users/dz0400847/testPDf"};
-        //参数1
+        args = new String[]{"D:\\tempFiles\\pdftest"};
+
+        // 参数1
         String arg1 = args[0];
-        targetDir=arg1;
-        if(targetDir.contains("\\")){
-            throw new RuntimeException("请使用/而不是\\");
-        }
-        if(arg1.endsWith("/")||arg1.endsWith("\\")){
-           throw new RuntimeException("参数1 不需要带\\或者/结尾");
-        }else{
-           if(arg1.contains("/")){
-               bookMarkSeriFilePath=arg1+"/"+bookMarkSeriFileName;
-               bookmarkFilePath=arg1+"/"+bookmarkFileName;
-           }else{
-               bookMarkSeriFilePath = arg1 + "\\" + bookMarkSeriFileName;
-               bookmarkFilePath=arg1+"\\"+bookmarkFileName;
-           }
-        }
-        System.out.println("书签序列化后存储文件路径："+bookMarkSeriFilePath);
-        System.out.println("书籍书签.txt路径：："+bookmarkFilePath);
-        if(args.length>1){
-            //参数2
+        init(arg1);
+        if (args.length > 1) {
+            // 参数2
             Boolean forceToGenAll = Boolean.valueOf(args[1]);
             if (forceToGenAll) {
                 // 删除序列化文件
                 createNewFile(bookMarkSeriFilePath);
             }
         }
-        //step1 反序列化文件
+        // step1 反序列化文件
         Long time = System.currentTimeMillis();
         deserializePDFFiles(bookMarkSeriFilePath);
+
+
         File file = new File(targetDir);
         File bookrmarkFile = new File(bookmarkFilePath);
-        //step2生成文件
-        genPDFbookmark(file,file.getAbsolutePath());
+        // step2生成文件
+        // 注意这里 file.getAbsolutePath windows下返回的 路径是D:\tempFiles\pdftest 所以windows下必须要使用\ 作为路径分割符号
+        genPDFbookmark(file, file.getAbsolutePath());
         seriableizeToFile(bookMarkSeriFilePath);
-        // writeToCategoryBookmarkFile(time, file);
-        writeAllToBookrmarkFile(bookrmarkFile,targetDir);
+        writeToDesBookmark();
 
     }
 
-    private static void writeAllToBookrmarkFile(File bookrmarkFile,String targetDir) {
-        System.out.println("===================>");
-        if (bookrmarkFile.exists()) {
-            bookrmarkFile.delete();
-        }
-        bookrmarkFile.getParentFile().mkdirs();
-        allCategory.forEach(category -> {
-            if(StringUtils.isEmpty(category)){
-                return;
+    private static void init(String arg1) {
+        targetDir = arg1;
+        if (SystemUtils.isMacOs() || SystemUtils.isLinux()) {
+            if (!targetDir.contains("/")) {
+                throw new RuntimeException("Linux ，mac操作系统使用/分割路径：" + targetDir);
             }
-            StringBuilder builder = new StringBuilder();
-            String fileDirectory = builder.append(targetDir).append("/").append(category).append("/").append("书签").toString();
-            File fileDir = new File(fileDirectory);
-            if (fileDir.exists() && fileDir.isDirectory()) {
-                File[] files = fileDir.listFiles();
-                for (File file : files) {
-                    //分类目录下的 txt文件，这个txt文件 所在的目录必须包含 书签两个字， 且文件名不能包含总书签三个字
-                    if (file.isFile() &&
-                            file.getName().endsWith(".txt")
-                            && !file.getName().contains("总书签")
-                            && !file.getName().contains(SpellHelper.getEname("总书签"))
-                            && !file.getName().contains("zongshuqian")
-                            &&file.getAbsolutePath().contains("书签")) {
-                        System.out.println("文件" + file.getAbsolutePath() + "写入到总文件" + bookrmarkFile.getAbsolutePath());
-                        appendFromFileToFile(file.getAbsolutePath(), bookrmarkFile.getAbsolutePath());
-                    } else {
-                        if (file.isFile()) {
-                            //  System.out.println("总书签文件不需要写入");
-                        }
+            separator = "/";
+            regSeparator="/";
+        } else {
+            if (!targetDir.contains("\\")) {
+                // E:\programme\python\书籍
+                throw new RuntimeException("windows系统请使用\\分割路径:" + targetDir + "示例：D:\\tempFiles\\pdftest");
+            }
+            //也就是第一个反斜杠是作为转义符存在的，第二个才是真正意义上的反斜杠,
+            //所以在字符串中要表示字符’\’要用“\\”来表示
+            //正则表达式匹配一个反斜杠，需要四个反斜杠"\\\\"
+            //在字符串中，两个反斜杠被解释为一个反斜杠，
+            //然后在作为正则表达式， \\ 则被正则表达式引擎解释为 \，所以在正则表达式中需要使用四个反斜杠
+            separator = "\\";
+            regSeparator="\\\\";
+        }
+
+        if (arg1.endsWith("/") || arg1.endsWith("\\")) {
+            throw new RuntimeException("参数1 不需要带\\或者/结尾");
+        } else {
+            if (arg1.contains("/")) {
+                bookMarkSeriFilePath = arg1 + "/" + bookMarkSeriFileName;
+                bookmarkFilePath = arg1 + "/" + bookmarkFileName;
+            } else {
+                bookMarkSeriFilePath = arg1 + "\\" + bookMarkSeriFileName;
+                bookmarkFilePath = arg1 + "\\" + bookmarkFileName;
+            }
+        }
+        System.out.println("书签序列化后存储文件路径：" + bookMarkSeriFilePath);
+        System.out.println("书籍书签.txt路径：：" + bookmarkFilePath);
+    }
+
+    /**
+     * 生成最终的目标书签
+     */
+    private static void writeToDesBookmark() {
+        // 删除之前的  书籍书签.txt
+        createNewFile(bookmarkFilePath);
+        // 遍历所有的书签目录
+        Iterator<Map.Entry<String, CategoryInfo>> iterator = categoryInfoMap.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, CategoryInfo> next = iterator.next();
+            CategoryInfo categoryInfo = next.getValue();
+            writeAllToBookrmarkFile(new File(bookmarkFilePath), categoryInfo.getCategoryBookmarkDir());
+        }
+    }
+
+    /**
+     * 生成分类总书签
+     */
+    private static void writeCategoryBookmark() {
+        // 遍历所有的书签目录
+        Iterator<Map.Entry<String, CategoryInfo>> iterator = categoryInfoMap.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, CategoryInfo> next = iterator.next();
+            CategoryInfo categoryInfo = next.getValue();
+            // 判断是否需要更新总书签
+            needToReGenCategoryBookmark(categoryInfo);
+            if (categoryInfo.needReGenCategoryBookmark) {
+                // 遍历 分类书签目录下的书签文件 写入总书签
+                // 删除分类 总书签
+                new File(categoryInfo.getCategoryBookmarkFilePath()).delete();
+
+                writeAllToBookrmarkFile(new File(categoryInfo.getCategoryBookmarkFilePath()), categoryInfo.getCategoryBookmarkDir());
+
+            } else {
+                System.out.println("分类总书签不需要更新：" + categoryInfo.getCategoryBookmarkFilePath());
+            }
+
+        }
+    }
+
+    /**
+     * 将 指定路径下的 书签写入到 指定的文件
+     *
+     * @param bookrmarkFile
+     * @param targetDir
+     */
+    private static void writeAllToBookrmarkFile(File bookrmarkFile, String targetDir) {
+        File targetDirFile = new File((targetDir));
+        if (!targetDir.contains("书签")) {
+            throw new RuntimeException("只能遍历 书签目录下下的文件，targetDir:" + targetDir + " 不是一个书签目录");
+        }
+        if (targetDirFile.exists() && targetDirFile.isDirectory()) {
+            File[] files = targetDirFile.listFiles();
+            for (File file : files) {
+                // 分类目录下的 txt文件，这个txt文件 所在的目录必须包含 书签两个字， 且文件名不能包含总书签三个字
+                if (file.isFile() &&
+                        file.getName().endsWith(".txt")
+                        && !file.getName().contains("总书签")
+                        && !file.getName().contains(SpellHelper.getEname("总书签"))
+                        && !file.getName().contains("zongshuqian")
+                        && file.getAbsolutePath().contains("书签")) {
+
+                    if (!allPDFBookMarkSet.contains(file.getAbsolutePath())) {// 注意上文限定了只能遍历书签目录， 否则这里不能乱删除文件
+                        // 如果当前的书签文件 不是一个有效的书签，则删除该书签
+                        file.delete();
+                        System.out.println("书签：" + file.getAbsolutePath() + "不是一个有效的书签，删除该书签");
+                        continue;
+                    }
+                    System.out.println("文件" + file.getAbsolutePath() + "写入到总文件" + bookrmarkFile.getAbsolutePath());
+                    appendFromFileToFile(file.getAbsolutePath(), bookrmarkFile.getAbsolutePath());
+                } else {
+                    if (file.isFile()) {
+                        //  System.out.println("总书签文件不需要写入");
                     }
                 }
-
             }
-        });
 
+        }
     }
 
-    private static void writeToCategoryBookmarkFile(Long time, File file) {
-        cache.values().forEach(pdfFile -> {
+    private static void needToReGenCategoryBookmark(CategoryInfo categoryInfo) {
+        // 判断是否需要重新生成 分类总书签
+        File fileDir = new File(categoryInfo.getCategoryBookmarkDir());
+        if (fileDir.exists() && fileDir.isDirectory()) {
+            File[] files = fileDir.listFiles();
+            for (File file : files) {
+                // 分类目录下的 txt文件，这个txt文件 所在的目录必须包含 书签两个字， 且文件名不能包含总书签三个字
+                if (file.isFile() &&
+                        file.getName().endsWith(".txt")
+                        && !file.getName().contains("总书签")
+                        && !file.getName().contains(SpellHelper.getEname("总书签"))
+                        && !file.getName().contains("zongshuqian")
+                        && file.getAbsolutePath().contains("书签")) {
 
-            if (!modifyCategoryCache.contains(pdfFile.getFileCategory())) {
-                return;
-            }
-            File categoryBookmarkFile = new File(pdfFile.getCategoryBookmarkFilePath());
+                    if (!allPDFBookMarkSet.contains(file.getAbsolutePath())) {
+                        // 如果当前的书签文件 不是一个有效的书签，则删除该书签,且需要更新总书签
+                        file.delete();
+                        System.out.println("书签：" + file.getAbsolutePath() + "不是一个有效的书签，删除该书签");
+                        categoryInfo.setNeedReGenCategoryBookmark(true);
+                    }
+                } else {
 
-            if (file.exists() && categoryBookmarkFile.lastModified() < time) {
-                file.delete();
+                }
             }
-            appendFromFileToFile(pdfFile.getBookmarkFilePath(), pdfFile.getCategoryBookmarkFilePath());
-        });
+
+        }
     }
+
 
     private static void appendFromFileToFile(String sourceFile, String desFile) {
         // createNewFile:如果D:/test 目录下没有 1.txt文件，则创建该文件；如果没有test目录，直接抛出异常，如果1.txt已经存在，
@@ -193,63 +298,72 @@ public class TestPDF {
         }
     }
 
-    private static void genPDFbookmark(File file,String targetDir) {
+    private static void genPDFbookmark(File file, String targetDir) {
         if (file.isDirectory()) {
             File[] files = file.listFiles();
             Arrays.stream(files).forEach(fileItem -> {
-                genPDFbookmark(fileItem,targetDir);
+                genPDFbookmark(fileItem, targetDir);
             });
         } else {
-            extraPdfBookmark(file,targetDir);
+            extraPdfBookmark(file, targetDir);
         }
     }
 
-    public static void extraPdfBookmark(File file,String targetDir) {
+    public static void extraPdfBookmark(File file, String targetDir) {
         // 判断文件是否是PDF文件
         PDDocument document = null;
-        String filePath = file.getPath();// D:\临时文件\0126\测试.pdf
+        String filePath = file.getPath();// D:\tempFiles\pdftest\docker\docker start I Docker Documentation.pdf
         String fileName = file.getName();// 测试.pdf
         if (!fileName.endsWith(".pdf")) {
             return;
         }
         String fileNameWithoutExtend = fileName.substring(0, fileName.length() - 4);
         try {
-            //书籍的分类目录
+            // 书籍的分类目录
             String fileCategory = "";
-            // /docs/tmp/a/a.pdf  replace  /doc/tmp --> /a/a.pdf--->{"","a","a.pdf"}
-            String[] splitTags = filePath.replaceAll(targetDir, "").split("/");
-            for (String splitTag : splitTags) {
-                if(splitTag!=null&&splitTag.length()>0){
-                    fileCategory=splitTag;
-                    break;
-                }
-            }
+            //  D:\tempFiles\pdftest\docker\docker start I Docker Documentation.pdf    D:\tempFiles\pdftest  --->docker\docker start I Docker Documentation.pdf  -->(docker,docker start I Docker Documentation.pdf)
+            // 文件相对于目标路径的 路径
+            String fileRelativeTargetPath = filePath.substring(targetDir.length() + 1, filePath.length());
+            // 文件的分类
+            String[] splitTags = fileRelativeTargetPath.split(regSeparator);
 
-            allCategory.add(fileCategory);
+            if (splitTags.length > 1) {
+                fileCategory = splitTags[0];
+            } else {
+                fileCategory = "";
+            }
+            // 生成文件的id，文件的id 使用 文件绝对路径 剔除targetPath，然后去除 路径分隔符后的字符串
+            // 文件id 和系统无关，根据文件id，在cache中获取到这个文件对应的File对象，然后获取上次修改的时间戳。
+            String fileId = fileRelativeTargetPath.replaceAll(regSeparator, ":");
+
+            // 文件名对应的书签
+            String bookmarkFilePath = bookmarkFilePath(fileCategory, fileNameWithoutExtend);
+            // 书签目录文件夹
+            String categoryBookmarkDir = categoryBookmarkDir(fileCategory);
+            // 分类的总书签
+            String categoryBookmarkFilePath = categoryBookmarkFilePath(fileCategory);
+
+            // 记录所有的有效书签路径
+            allPDFBookMarkSet.add(bookmarkFilePath);
+            categoryInfoMap.putIfAbsent(categoryBookmarkDir, new CategoryInfo(categoryBookmarkDir, categoryBookmarkDir, categoryBookmarkFilePath, false));
+
             long lastModified = file.lastModified();
-            PDFFile dbPdfFile = cache.get(filePath);
+            PDFFile dbPdfFile = cache.get(fileId);
             if (dbPdfFile != null && dbPdfFile.getLastModifyTime() >= lastModified) {
                 return;
             }
-          /*  count++;
-            if (count >4) {
-                return;
-            }*/
             System.out.println(filePath + "修改过，需要重新生成书签");
-            modifyCategoryCache.add(fileCategory);
-            StringBuilder bookmarkFileBuilder = new StringBuilder();
-            bookmarkFileBuilder.append(targetDir).append("/").append(fileCategory).append("/").append("书签").append("/").append(fileNameWithoutExtend).append(".txt");
-            StringBuilder categoryBookmarkFileBuilder = new StringBuilder();
-            categoryBookmarkFileBuilder.append(targetDir).append("/").append(fileCategory).append("/").append("书签").append("/").append("001" + fileCategory + "-总书签").append(".txt");
-            File bookmarkFile = new File(bookmarkFileBuilder.toString());
+            // 标记分类总书签需要重新整理
+            categoryInfoMap.get(categoryBookmarkDir).setNeedReGenCategoryBookmark(true);
+
+            File bookmarkFile = new File(bookmarkFilePath);
             if (bookmarkFile.exists()) {
                 bookmarkFile.delete();
             }
-            PDFFile pdfFile = new PDFFile(filePath, fileName, fileCategory, lastModified, bookmarkFileBuilder.toString(), categoryBookmarkFileBuilder.toString());
-            cache.put(filePath, pdfFile);
-            allCategory.add(pdfFile.getFileCategory());
+            PDFFile pdfFile = new PDFFile(fileId, filePath, fileName, fileCategory, lastModified, bookmarkFilePath, categoryBookmarkFilePath);
 
-            //加载PDF
+            cache.put(fileId, pdfFile);
+            // 加载PDF
             document = PDDocument.load(file);
             COSDocument cos = document.getDocument();
             // PDF文件的书签内容大纲
@@ -258,14 +372,15 @@ public class TestPDF {
             if (outline != null) {
                 Integer level = 0;    // A nesting level
                 writeBookMark(document, outline, level, bookmarkFile, fileNameWithoutExtend);
-            }else{
-                //没有大纲内容，只写入 文件名
-               // FileUtils.writeStringToFile(new File(bookmarkFile.getAbsolutePath()), "\n书名：《" + fileName + "》", "UTF-8", true);
+            } else {
+                // 没有大纲内容，只写入 文件名
+                // FileUtils.writeStringToFile(new File(bookmarkFile.getAbsolutePath()), "\n书名：《" + fileName + "》", "UTF-8", true);
             }
         } catch (Exception e) {
             System.out.println("提取PDF文件 书签出现异常：" + filePath);
+            cache.remove(filePath);
             e.printStackTrace();
-        }finally {
+        } finally {
             if (document != null) {
                 try {
                     document.close();
@@ -276,6 +391,44 @@ public class TestPDF {
         }
 
 
+    }
+
+    private static String bookmarkFilePath(String fileCategory, String fileNameWithoutExtend) {
+        StringBuilder bookmarkFileBuilder = new StringBuilder();
+        bookmarkFileBuilder.append(targetDir).append(separator);
+        if (StringUtils.isNotEmpty(fileCategory)) {
+            bookmarkFileBuilder.append(fileCategory).append(separator);
+        }
+        bookmarkFileBuilder.append("书签").append(separator).append(SpellHelper.getEname(fileNameWithoutExtend)).append(".txt");
+        return bookmarkFileBuilder.toString();
+    }
+
+    /**
+     * 书签目录
+     *
+     * @param fileCategory
+     * @return
+     */
+    private static String categoryBookmarkDir(String fileCategory) {
+        StringBuilder categoryBookmarkDir = new StringBuilder();
+        categoryBookmarkDir.append(targetDir).append(separator);
+        if (StringUtils.isNotEmpty(fileCategory)) {
+
+            categoryBookmarkDir.append(fileCategory).append(separator);
+        }
+        categoryBookmarkDir.append("书签");
+        return categoryBookmarkDir.toString();
+    }
+
+    private static String categoryBookmarkFilePath(String fileCategory) {
+        StringBuilder categoryBookmarkFileBuilder = new StringBuilder();
+        categoryBookmarkFileBuilder.append(targetDir).append(separator);
+        if (StringUtils.isNotEmpty(fileCategory)) {
+
+            categoryBookmarkFileBuilder.append(fileCategory).append(separator);
+        }
+        categoryBookmarkFileBuilder.append("书签").append(separator).append("001" + fileCategory + "-总书签").append(".txt");
+        return categoryBookmarkFileBuilder.toString();
     }
 
     public static void writeBookMark(PDDocument document, PDOutlineNode outline, Integer level, File bookmarkFile, String fileName) throws Exception {
@@ -353,8 +506,9 @@ public class TestPDF {
 
         List<PDFFile> files = (List<PDFFile>) oi.readObject();
         files.forEach(file -> {
-            cache.put(file.getFilePath(), file);
-            allCategory.add(file.getFileCategory());
+            if (!StringUtils.isEmpty(file.getId())) {
+                cache.put(file.getFilePath(), file);
+            }
         });
 
 
